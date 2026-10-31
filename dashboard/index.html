@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KrishiStream | Real-Time Agricultural Market Price Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- TOP NAVIGATION & HEADER -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo-wrapper">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            <circle cx="12" cy="12" r="9" stroke="url(#logo-grad)" stroke-width="2"/>
+                            <defs>
+                                <linearGradient id="logo-grad" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0%" stop-color="#10b981"/>
+                                    <stop offset="100%" stop-color="#06b6d4"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="brand-title">KrishiStream <span class="badge-tag">AGMARKNET LIVE</span></div>
+                        <div class="brand-subtitle">Real-Time Context-Aware Agricultural Market Price Analytics & Anomaly Detection</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STREAM CONTROLS -->
+            <div class="header-controls">
+                <div class="live-pill active" id="stream-status-pill">
+                    <span class="pulsing-dot"></span>
+                    <span id="stream-status-text">STREAM LIVE</span>
+                    <span class="speed-label" id="stream-hz-label">2.0 Hz</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="source-select">Source:</label>
+                    <select id="source-select" class="custom-select">
+                        <option value="LOCAL_DATASET" selected>Dataset (14.4k Replay)</option>
+                        <option value="LIVE_GOV_API">Live data.gov.in API</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="speed-select">Speed:</label>
+                    <select id="speed-select" class="custom-select">
+                        <option value="1">1x (1 Hz)</option>
+                        <option value="2" selected>2x (2 Hz)</option>
+                        <option value="5">5x (5 Hz)</option>
+                        <option value="10">10x (10 Hz)</option>
+                    </select>
+                </div>
+
+                <button id="toggle-stream-btn" class="btn btn-secondary">
+                    <span id="toggle-icon">⏸</span> <span id="toggle-text">Pause</span>
+                </button>
+
+                <!-- DEMO ANOMALY INJECTION BUTTONS -->
+                <div class="anomaly-demo-box">
+                    <span class="demo-tag">DEMO TRIGGER:</span>
+                    <button id="btn-spike-tomato" class="btn btn-danger-glow" title="Inject +180% price surge in Kolar APMC">
+                        ⚡ Spike Tomato
+                    </button>
+                    <button id="btn-crash-onion" class="btn btn-warning-glow" title="Inject 70% price crash in Lasalgaon">
+                        📉 Crash Onion
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- LIVE TICKER MARQUEE -->
+        <div class="ticker-bar">
+            <div class="ticker-label">LATEST ARRIVALS</div>
+            <div class="ticker-content" id="ticker-marquee">
+                <span class="ticker-item placeholder-item">Listening for incoming mandi price stream events...</span>
+            </div>
+        </div>
+
+        <!-- MAIN DASHBOARD CONTENT -->
+        <main class="dashboard-grid">
+            <!-- ROW 1: KPI CARDS -->
+            <section class="kpi-row">
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <span class="kpi-title">TOTAL STREAM EVENTS</span>
+                        <div class="kpi-icon icon-cyan">⚡</div>
+                    </div>
+                    <div class="kpi-value" id="kpi-total">0</div>
+                    <div class="kpi-footer">
+                        <span class="trend-positive">● Active Kafka Stream</span>
+                        <span class="kpi-sub" id="kpi-speed">2.0 events/sec</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <span class="kpi-title">NORMAL TRANSACTIONS</span>
+                        <div class="kpi-icon icon-emerald">✓</div>
+                    </div>
+                    <div class="kpi-value value-emerald" id="kpi-normal">0</div>
+                    <div class="kpi-footer">
+                        <span class="kpi-sub">Within expected [μ - 2σ, μ + 2σ]</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <span class="kpi-title">WARNING DEVIATIONS</span>
+                        <div class="kpi-icon icon-amber">⚠</div>
+                    </div>
+                    <div class="kpi-value value-amber" id="kpi-warning">0</div>
+                    <div class="kpi-footer">
+                        <span class="kpi-sub">Moderate IQR Outlier (2σ &lt; |Z| &le; 3σ)</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <span class="kpi-title">CRITICAL PRICE SHOCKS</span>
+                        <div class="kpi-icon icon-rose">🚨</div>
+                    </div>
+                    <div class="kpi-value value-rose" id="kpi-critical">0</div>
+                    <div class="kpi-footer">
+                        <span class="kpi-sub">Severe Anomaly (|Z| &gt; 3.0 or &gt;50% Shock)</span>
+                    </div>
+                </div>
+
+                <div class="kpi-card glass-panel">
+                    <div class="kpi-header">
+                        <span class="kpi-title">CROSS-MARKET ARBITRAGE</span>
+                        <div class="kpi-icon icon-purple">⇄</div>
+                    </div>
+                    <div class="kpi-value value-purple" id="kpi-arbitrage">0</div>
+                    <div class="kpi-footer">
+                        <span class="kpi-sub">Price Disparities &gt; 25% Detected</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ROW 2: INTERACTIVE MAP & REAL-TIME CHART -->
+            <div class="visual-row">
+                <!-- MANDI GEO MAP -->
+                <div class="glass-panel map-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <h2 class="panel-title">Geospatial Mandi Network</h2>
+                            <p class="panel-desc">Real-time status across Indian states (Green: Normal, Amber: Warning, Crimson: Critical)</p>
+                        </div>
+                        <div class="map-legend">
+                            <span class="legend-dot dot-normal"></span> Normal
+                            <span class="legend-dot dot-warning"></span> Warning
+                            <span class="legend-dot dot-critical"></span> Shock
+                        </div>
+                    </div>
+                    <div id="mandi-map" class="map-container"></div>
+                </div>
+
+                <!-- REAL-TIME PRICE VS BASELINE CHART -->
+                <div class="glass-panel chart-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <h2 class="panel-title">Live Price Stream vs. Expected Baseline</h2>
+                            <p class="panel-desc">Context Bounds [μ - 2σ, μ + 2σ] &amp; EWMA Adaptive Drift</p>
+                        </div>
+                        <div class="chart-controls">
+                            <select id="commodity-filter" class="custom-select chart-filter">
+                                <option value="ALL">All Commodities</option>
+                                <option value="Tomato" selected>Tomato</option>
+                                <option value="Onion">Onion</option>
+                                <option value="Potato">Potato</option>
+                                <option value="Maize">Maize</option>
+                                <option value="Soyabean">Soyabean</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="price-stream-chart"></canvas>
+                    </div>
+                    <div class="chart-legend-custom">
+                        <span class="chart-badge badge-price">● Modal Price (₹/Qtl)</span>
+                        <span class="chart-badge badge-baseline">■ Expected Range [μ±2σ]</span>
+                        <span class="chart-badge badge-drift">- - EWMA Adaptive Drift</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROW 3: ANOMALY ALERT FEED & ARBITRAGE MATRIX -->
+            <div class="bottom-row">
+                <!-- REAL-TIME ALERT FEED -->
+                <div class="glass-panel alert-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <h2 class="panel-title">Live Anomaly Alert Feed</h2>
+                            <p class="panel-desc">High-priority stream notifications matching Kafka topic <code>mandi-alerts</code></p>
+                        </div>
+                        <span class="badge-count" id="alert-counter-badge">0 Alerts</span>
+                    </div>
+                    <div class="alert-feed-list" id="alert-feed-container">
+                        <div class="empty-state">No anomalies detected yet. Monitoring live stream...</div>
+                    </div>
+                </div>
+
+                <!-- CROSS-MARKET SPREAD MATRIX -->
+                <div class="glass-panel spread-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <h2 class="panel-title">Cross-Market Arbitrage &amp; Regional Spreads</h2>
+                            <p class="panel-desc">Inter-mandi price divergence for identical commodities</p>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th>Commodity</th>
+                                    <th>Reported Market</th>
+                                    <th>Observed Price</th>
+                                    <th>Neighbor Mandi</th>
+                                    <th>Spread (₹/Qtl)</th>
+                                    <th>Disparity</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="arbitrage-table-body">
+                                <tr>
+                                    <td colspan="7" class="text-center">Aggregating sliding window market reports...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- AUDIO ALERT FOR SHOCKS -->
+    <audio id="audio-alert" preload="auto">
+        <source src="data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU9vT18A" type="audio/wav">
+    </audio>
+
+    <!-- Leaflet JS & Chart.js -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
